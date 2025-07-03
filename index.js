@@ -50,6 +50,45 @@ async function run() {
       }
     });
 
+    // ✅ GET Fetch all parcels created by the given user email, sorted by creation time (newest first)
+    app.get("/parcels", async (req, res) => {
+      const email = req.query.email;
+
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      try {
+        const parcels = await db
+          .collection("parcels")
+          .find({ createdBy: email })
+          .sort({ createdAt: -1 }) // newest first
+          .toArray();
+
+        res.json(parcels);
+      } catch (error) {
+        console.error("Error fetching parcels:", error);
+        res.status(500).json({ error: "Failed to fetch parcels" });
+      }
+    });
+
+    // ✅ DELETE a parcel by ID
+    app.delete("/parcels/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+
+        const result = await parcelsCollection.deleteOne(query);
+
+        if (result.deletedCount === 1) {
+          res.status(200).json({ message: "Parcel deleted successfully" });
+        } else {
+          res.status(404).json({ error: "Parcel not found" });
+        }
+      } catch (err) {
+        res.status(500).json({ error: "Failed to delete parcel" });
+      }
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
