@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 
 const app = express();
@@ -29,6 +29,19 @@ async function run() {
     const db = client.db("parcelDelivery");
     const parcelsCollection = db.collection("parcels");
 
+    /*
+     * 📦 Parcel Delivery API
+     *
+     * This backend server is being developed incrementally.
+     * Each API route is added based on feature needs during development.
+     *
+     * Instead of writing all endpoints at once, I am adding them one by one
+     * as each specific functionality is implemented (e.g., after Send Parcel form, then Delete, etc).
+     *
+     * This approach ensures clarity, simplicity, and avoids unnecessary code.
+     *
+     */
+
     // ✅ GET all parcels
     app.get("/parcels", async (req, res) => {
       try {
@@ -53,11 +66,10 @@ async function run() {
     // ✅ GET Fetch all parcels created by the given user email, sorted by creation time (newest first)
     app.get("/parcels", async (req, res) => {
       const email = req.query.email;
-
+      console.log(email);
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
       }
-
       try {
         const parcels = await db
           .collection("parcels")
@@ -74,20 +86,12 @@ async function run() {
 
     // ✅ DELETE a parcel by ID
     app.delete("/parcels/:id", async (req, res) => {
-      try {
-        const id = req.params.id;
-        const query = { _id: new ObjectId(id) };
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
 
-        const result = await parcelsCollection.deleteOne(query);
+      const result = await parcelsCollection.deleteOne(query);
 
-        if (result.deletedCount === 1) {
-          res.status(200).json({ message: "Parcel deleted successfully" });
-        } else {
-          res.status(404).json({ error: "Parcel not found" });
-        }
-      } catch (err) {
-        res.status(500).json({ error: "Failed to delete parcel" });
-      }
+      res.send(result);
     });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
