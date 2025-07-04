@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
+const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_KEY);
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -46,6 +47,7 @@ async function run() {
     app.get("/parcels", async (req, res) => {
       try {
         const parcels = await parcelsCollection.find().toArray();
+        console.log("is it hited?");
         res.status(200).json(parcels);
       } catch (err) {
         res.status(500).json({ error: "Failed to fetch parcels" });
@@ -64,7 +66,7 @@ async function run() {
     });
 
     // ✅ GET Fetch all parcels created by the given user email, sorted by creation time (newest first)
-    app.get("/parcels", async (req, res) => {
+    app.get("/parcels/user", async (req, res) => {
       const email = req.query.email;
       console.log(email);
       if (!email) {
@@ -92,6 +94,44 @@ async function run() {
       const result = await parcelsCollection.deleteOne(query);
 
       res.send(result);
+    });
+
+    const { ObjectId } = require("mongodb"); // ✅ make sure it's imported at top
+
+    // ✅ Get a single parcel by parcelId
+    app.get("/parcels/:id", async (req, res) => {
+      const id = req.params.id;
+      console.log("parcel id sing", id);
+      try {
+        const parcel = await parcelsCollection.findOne({
+          _id: new ObjectId(id),
+        });
+
+        res.status(200).send(parcel);
+      } catch (err) {
+        console.error("❌ Error fetching parcel by ID:", err);
+        res.status(500).json({ error: "Failed to fetch parcel" });
+      }
+    });
+
+    // ✅ stripe payment gateway api Create a payment intent
+    app.post("/create-payment-intent", async (req, res) => {
+      try {
+        const { amountInCents, parcelId } = req.body;
+
+        // Create a PaymentIntent with the order amount and currency
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountInCents,
+          currency: "usd",
+          payment_method_types: ["card"],
+          // Add any additional options here
+        });
+
+        // Send the client secret to the client
+        res.json({ clientSecret: paymentIntent.client_secret });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
     });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
