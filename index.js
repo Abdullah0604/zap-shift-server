@@ -29,7 +29,7 @@ async function run() {
 
     const db = client.db("parcelDelivery");
     const parcelsCollection = db.collection("parcels");
-
+    const paymentsCollection = db.collection("payments");
     /*
      * 📦 Parcel Delivery API
      *
@@ -133,6 +133,56 @@ async function run() {
         res.status(500).json({ error: error.message });
       }
     });
+
+    // ✅ save payments history and update unpaid to paid
+    app.patch("/parcels/payment", async (req, res) => {
+      const { amount, transactionId, user_email, parcelId, paymentMehtod } =
+        req.body; // expect: { amount, transactionId, user_email }
+
+      if (!ObjectId.isValid(parcelId)) {
+        return res.status(400).json({ error: "Invalid parcel ID" });
+      }
+
+      try {
+        // Step 1: Update parcel's payment status
+        const updateResult = await db.collection("parcels").updateOne(
+          { _id: new ObjectId(parcelId) },
+          {
+            $set: {
+              payment_status: "paid",
+            },
+          }
+        );
+
+        if (updateResult.modifiedCount === 0) {
+          return res
+            .status(404)
+            .json({ error: "Parcel not found or already paid" });
+        }
+
+        // Step 2: Create payment record
+        const paymentRecord = {
+          parcelId,
+          user_email,
+          transactionId,
+          amount,
+          paymentMehtod,
+          paid_at_string: new Date().toISOString(),
+          paid_at: new Date(),
+        };
+
+        const paymentInsert = await paymentsCollection.insertOne(paymentRecord);
+
+        res.status(200).json({
+          message: "Payment processed successfully",
+          paymentId: paymentInsert.insertedId,
+        });
+      } catch (err) {
+        console.error("❌ Payment error:", err);
+        res.status(500).json({ error: "Payment processing failed" });
+      }
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
