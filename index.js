@@ -291,6 +291,20 @@ async function run() {
       res.send(pendingRiders);
     });
 
+    // ✅ update riders status
+    app.patch("/riders/:id/status", async (req, res) => {
+      const riderId = req.params.id;
+      const { action } = req.body; // expect "approve" or "reject"
+      const updateData = {
+        status: action === "approve" ? "active" : "rejected",
+      };
+      const result = await ridersCollection.updateOne(
+        { _id: new ObjectId(riderId) },
+        { $set: updateData }
+      );
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
