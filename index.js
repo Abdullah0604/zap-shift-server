@@ -135,7 +135,7 @@ async function run() {
     });
 
     // ✅ save payments history and update unpaid to paid
-    app.patch("/parcels/payment", async (req, res) => {
+    app.post("/parcels/payment", async (req, res) => {
       const { amount, transactionId, user_email, parcelId, paymentMehtod } =
         req.body; // expect: { amount, transactionId, user_email }
 
@@ -173,13 +173,62 @@ async function run() {
 
         const paymentInsert = await paymentsCollection.insertOne(paymentRecord);
 
-        res.status(200).json({
+        res.status(200).send({
           message: "Payment processed successfully",
-          paymentId: paymentInsert.insertedId,
+          insertedId: paymentInsert.insertedId,
         });
       } catch (err) {
         console.error("❌ Payment error:", err);
         res.status(500).json({ error: "Payment processing failed" });
+      }
+    });
+
+    app.get("/payments", async (req, res) => {
+      const email = req.query.email;
+
+      const filter = email ? { user_email: email } : {};
+      try {
+        const payments = await paymentsCollection
+          .find(filter)
+          .sort({ paid_at: -1 }) // ✅ newest first
+          .toArray();
+
+        res.status(200).send(payments);
+      } catch (err) {
+        console.error("❌ Failed to get payment history:", err);
+        res.status(500).json({ error: "Failed to fetch payment history" });
+      }
+    });
+
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      const email = user.email;
+
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      try {
+        // 🔍 Check if user already exists
+        const existingUser = await db.collection("users").findOne({ email });
+
+        if (existingUser) {
+          return res.status(200).json({ message: "User already exists" });
+        }
+
+        // 🆕 Add default role if not present
+        user.role = user.role || "user";
+        user.createdAt = new Date();
+
+        const result = await db.collection("users").insertOne(user);
+
+        res.status(201).json({
+          message: "User registered successfully",
+          insertedId: result.insertedId,
+        });
+      } catch (err) {
+        console.error("❌ Error creating user:", err);
+        res.status(500).json({ error: "Failed to register user" });
       }
     });
 
