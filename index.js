@@ -279,6 +279,18 @@ async function run() {
       const result = await ridersCollection.insertOne(data);
       res.send(result);
     });
+
+    // ✅ get all pending riders data
+    app.get("/riders/pending", async (req, res) => {
+      const query = req.query.status;
+      const pendingRiders = await ridersCollection
+        .find({ status: query }) // filter pending riders
+        .sort({ createdAt: -1 }) // newest first
+        .toArray();
+
+      res.send(pendingRiders);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
