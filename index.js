@@ -30,6 +30,7 @@ async function run() {
     const db = client.db("parcelDelivery");
     const parcelsCollection = db.collection("parcels");
     const paymentsCollection = db.collection("payments");
+    const usersCollection = db.collection("users");
     /*
      * 📦 Parcel Delivery API
      *
@@ -200,6 +201,7 @@ async function run() {
       }
     });
 
+    // ✅ Save new user (or skip if already exists)
     app.post("/users", async (req, res) => {
       const user = req.body;
       const email = user.email;
@@ -210,17 +212,13 @@ async function run() {
 
       try {
         // 🔍 Check if user already exists
-        const existingUser = await db.collection("users").findOne({ email });
+        const existingUser = await usersCollection.findOne({ email });
 
         if (existingUser) {
           return res.status(200).json({ message: "User already exists" });
         }
 
-        // 🆕 Add default role if not present
-        user.role = user.role || "user";
-        user.createdAt = new Date();
-
-        const result = await db.collection("users").insertOne(user);
+        const result = await usersCollection.insertOne(user);
 
         res.status(201).json({
           message: "User registered successfully",
