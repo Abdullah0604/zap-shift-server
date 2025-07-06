@@ -296,7 +296,7 @@ async function run() {
       const riderId = req.params.id;
       const { action } = req.body; // expect "approve" or "reject"
       const updateData = {
-        status: action === "approve" ? "active" : "rejected",
+        status: action === "approved" ? "active" : "rejected",
       };
       const result = await ridersCollection.updateOne(
         { _id: new ObjectId(riderId) },
@@ -305,6 +305,16 @@ async function run() {
       res.send(result);
     });
 
+    // ✅ get all active riders data
+    app.get("/riders/active", async (req, res) => {
+      const query = req.query.status;
+      const pendingRiders = await ridersCollection
+        .find({ status: query }) // filter pending riders
+        .sort({ createdAt: -1 }) // newest first
+        .toArray();
+
+      res.send(pendingRiders);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
