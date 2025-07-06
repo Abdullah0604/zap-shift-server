@@ -3,6 +3,7 @@ const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const stripe = require("stripe")(process.env.PAYMENT_GATEWAY_KEY);
+const admin = require("firebase-admin");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -10,6 +11,12 @@ const port = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+const serviceAccount = require("./firebase-admin-key.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.aq5ggi6.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -27,10 +34,38 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
+    const varifyFBToken = async (req, res, next) => {
+      const authHeaders = req.headers.authorization;
+      console.log("headers from middleware", authHeaders);
+      if (!authHeaders || !authHeaders.startsWith("Bearer "))
+        return res.status(401).send({ message: "unauthorized" });
+
+      const token = authHeaders.split(" ")[1];
+      if (!token) return res.status(401).send({ message: "unauthorized" });
+
+      // varify token
+      try {
+        const decoded = await admin.auth().verifyIdToken(token);
+        req.decoded = decoded; // contains email, uid, etc.
+        next();
+      } catch (error) {
+        return res.status(403).json({ error: "Invalid or expired token" });
+      }
+      console.log(token);
+    };
+
+    const verifyEmail = async (req, res, next) => {
+      if (req.decoded.email !== req.query.email) {
+        return res.status(403).send("Forbidden");
+      }
+      next();
+    };
+
     const db = client.db("parcelDelivery");
     const parcelsCollection = db.collection("parcels");
     const paymentsCollection = db.collection("payments");
     const usersCollection = db.collection("users");
+    const ridersCollection = db.collection("riders");
     /*
      * 📦 Parcel Delivery API
      *
@@ -67,9 +102,10 @@ async function run() {
     });
 
     // ✅ GET Fetch all parcels created by the given user email, sorted by creation time (newest first)
-    app.get("/parcels/user", async (req, res) => {
+    app.get("/parcels/user", varifyFBToken, verifyEmail, async (req, res) => {
       const email = req.query.email;
-      console.log(email);
+      console.log(req.decoded);
+
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
       }
@@ -96,8 +132,6 @@ async function run() {
 
       res.send(result);
     });
-
-    const { ObjectId } = require("mongodb"); // ✅ make sure it's imported at top
 
     // ✅ Get a single parcel by parcelId
     app.get("/parcels/:id", async (req, res) => {
@@ -184,7 +218,8 @@ async function run() {
       }
     });
 
-    app.get("/payments", async (req, res) => {
+    // ✅ get user's payment by email
+    app.get("/payments", varifyFBToken, verifyEmail, async (req, res) => {
       const email = req.query.email;
 
       const filter = email ? { user_email: email } : {};
@@ -215,7 +250,15 @@ async function run() {
         const existingUser = await usersCollection.findOne({ email });
 
         if (existingUser) {
-          return res.status(200).json({ message: "User already exists" });
+          console.log(user);
+          const updatedLastLogin = await usersCollection.updateOne(
+            { email: email },
+            { $set: { last_log_in: user.last_log_in } }
+          );
+          return res.status(200).json({
+            message: "User already exists. But updated last login time",
+            updatedLastLogin,
+          });
         }
 
         const result = await usersCollection.insertOne(user);
@@ -230,6 +273,12 @@ async function run() {
       }
     });
 
+    // ✅ save riders data
+    app.post("/riders", async (req, res) => {
+      const data = req.body;
+      const result = await ridersCollection.insertOne(data);
+      res.send(result);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
