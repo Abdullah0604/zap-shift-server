@@ -291,10 +291,11 @@ async function run() {
       res.send(pendingRiders);
     });
 
-    // ✅ update riders status
+    // ✅ update riders status and update user role
     app.patch("/riders/:id/status", async (req, res) => {
       const riderId = req.params.id;
-      const { action } = req.body; // expect "approve" or "reject"
+      const { action, email } = req.body; // expect "approve" or "reject"
+      console.log(action, email);
       const updateData = {
         status: action === "approved" ? "active" : "rejected",
       };
@@ -302,6 +303,18 @@ async function run() {
         { _id: new ObjectId(riderId) },
         { $set: updateData }
       );
+
+      // update user role
+      if (action === "approved") {
+        const updatedDoc = {
+          $set: { role: "rider" },
+        };
+        const roleResult = await usersCollection.updateOne(
+          { email: email },
+          updatedDoc
+        );
+        console.log(roleResult.modifiedCount);
+      }
       res.send(result);
     });
 
@@ -315,6 +328,33 @@ async function run() {
 
       res.send(pendingRiders);
     });
+
+    // ✅ get user for making admin
+    app.get("/users/search", async (req, res) => {
+      const query = req.query.query;
+      console.log(query);
+      if (!query) {
+        return res.status(400).json({ error: "Missing search query" });
+      }
+
+      try {
+        const user = await usersCollection
+          .find({
+            email: { $regex: query, $options: "i" },
+          })
+          .limit(10)
+          .toArray();
+
+        if (!user) {
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        res.send(user);
+      } catch (err) {
+        res.status(500).json({ error: "Failed to search user" });
+      }
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
