@@ -329,7 +329,7 @@ async function run() {
       res.send(pendingRiders);
     });
 
-    // ✅ get user for making admin
+    // ✅ get all user for making  admin from them
     app.get("/users/search", async (req, res) => {
       const query = req.query.query;
       console.log(query);
@@ -353,6 +353,24 @@ async function run() {
       } catch (err) {
         res.status(500).json({ error: "Failed to search user" });
       }
+    });
+
+    // ✅ change role user to admin or admin to user. this api is only access for admin because only admin can change role
+    app.patch("/users/role/:id", async (req, res) => {
+      const userId = req.params.id;
+      const { role } = req.body;
+
+      // Validate role
+      if (!["admin", "user"].includes(role)) {
+        return res.status(400).json({ error: "Invalid role" });
+      }
+
+      const result = await usersCollection.updateOne(
+        { _id: new ObjectId(userId) },
+        { $set: { role } }
+      );
+
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
